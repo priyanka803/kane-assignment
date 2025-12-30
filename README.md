@@ -119,7 +119,7 @@ spring.datasource.username=root
 spring.datasource.password=root
 ```
 ### Database Design
-  ![Alt text](ER-diagram.jpg)
+  ![Alt text](ER-diagram.png)
 -----
 ---
 ## ⚠️ Deployment & Troubleshooting
