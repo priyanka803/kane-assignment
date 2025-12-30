@@ -60,7 +60,7 @@ The project is organized into one folder only: backend.
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/priyanka803/assignment-repo.git
+git clone [https://github.com/priyanka803/assignment-repo.git](https://github.com/priyanka803/kane-assignment.git)
 cd tax-aware-portfolio-rebalancing
 ```
 
