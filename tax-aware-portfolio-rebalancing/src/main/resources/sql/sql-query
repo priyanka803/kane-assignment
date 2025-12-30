@@ -1,0 +1,23 @@
+CREATE TABLE `portfolio` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `name` varchar(255) DEFAULT NULL,
+  `target_bond_percent` decimal(38,2) DEFAULT NULL,
+  `target_stock_percent` decimal(38,2) DEFAULT NULL,
+  `total_amount` decimal(38,2) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+);
+
+CREATE TABLE `tax_lot` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `amount` decimal(38,2) DEFAULT NULL,
+  `amount_after_profit` decimal(38,2) DEFAULT NULL,
+  `asset_name` varchar(255) DEFAULT NULL,
+  `asset_type` varchar(255) DEFAULT NULL,
+  `buy_date` date DEFAULT NULL,
+  `profit` decimal(38,2) DEFAULT NULL,
+  `tax_percent` decimal(38,2) DEFAULT NULL,
+  `term` varchar(255) DEFAULT NULL,
+  `user_id` bigint DEFAULT NULL,
+  PRIMARY KEY (`id`)
+);
+
