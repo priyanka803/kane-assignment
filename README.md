@@ -60,7 +60,7 @@ The project is organized into one folder only: backend.
 
 ### 1. Clone the Repository
 ```bash
-git clone [https://github.com/priyanka803/assignment-repo.git](https://github.com/priyanka803/kane-assignment.git)
+git clone https://github.com/priyanka803/assignment-repo.git
 cd tax-aware-portfolio-rebalancing
 ```
 
@@ -119,7 +119,7 @@ spring.datasource.username=root
 spring.datasource.password=root
 ```
 ### Database Design
-  ![Alt text](ER-diagram.png)
+  ![Alt text](ER-diagram.jpg)
 -----
 ---
 ## ⚠️ Deployment & Troubleshooting
