@@ -166,4 +166,4 @@ Then switch back:
 spring.jpa.hibernate.ddl-auto=update
 ```
 
-✔ README is formatted correctly.
+
