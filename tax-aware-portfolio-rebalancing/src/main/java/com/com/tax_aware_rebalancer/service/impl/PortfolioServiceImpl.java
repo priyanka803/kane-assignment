@@ -72,136 +72,174 @@ public class PortfolioServiceImpl implements PortfolioService {
 
 	@Override
 	public String rebalancePortfolio(Long userId) {
-		log.info("Rebalancing started for UserId: " + userId);
+	    log.info("Rebalancing started for UserId: " + userId);
 
-		try {
-			Portfolio portfolio = getByUserId(userId);
-			List<TaxLot> lots = taxLotRepository.findByUserId(userId);
+	    try {
+	        Portfolio portfolio = getByUserId(userId);
+	        List<TaxLot> lots = taxLotRepository.findByUserId(userId);
 
-			if (lots.isEmpty()) {
-				return "No tax lots available for rebalance";
-			}
+	        if (lots.isEmpty()) {
+	            return "No tax lots available for rebalance";
+	        }
 
-			BigDecimal stockTotal = BigDecimal.ZERO;
-			BigDecimal bondTotal = BigDecimal.ZERO;
+	        BigDecimal stockTotal = BigDecimal.ZERO;
+	        BigDecimal bondTotal = BigDecimal.ZERO;
 
-			for (TaxLot lot : lots) {
-				if (lot.getAssetType().equalsIgnoreCase("BOND")) {
-					bondTotal = bondTotal.add(lot.getAmountAfterProfit());
-				} else {
-					stockTotal = stockTotal.add(lot.getAmountAfterProfit());
-				}
-			}
+	        for (TaxLot lot : lots) {
+	            if (lot.getAssetType().equalsIgnoreCase("BOND")) {
+	                bondTotal = bondTotal.add(lot.getAmountAfterProfit());
+	            } else {
+	                stockTotal = stockTotal.add(lot.getAmountAfterProfit());
+	            }
+	        }
 
-			BigDecimal total = stockTotal.add(bondTotal);
-			if (total.compareTo(BigDecimal.ZERO) == 0) {
-				return "Total portfolio value is zero, cannot rebalance";
-			}
+	        BigDecimal total = stockTotal.add(bondTotal);
+	        if (total.compareTo(BigDecimal.ZERO) == 0) {
+	            return "Total portfolio value is zero, cannot rebalance";
+	        }
 
+	        BigDecimal currentStockPercent =
+	                stockTotal.multiply(new BigDecimal("100"))
+	                          .divide(total, 2);
 
-			BigDecimal currentStockPercent = stockTotal.multiply(new BigDecimal("100")).divide(total, 2);
+	        BigDecimal highestValue =
+	                portfolio.getTargetStockPercent().add(new BigDecimal("5"));
+	        BigDecimal lowestValue =
+	                portfolio.getTargetStockPercent().subtract(new BigDecimal("5"));
 
-			BigDecimal highestValue  = portfolio.getTargetStockPercent().add(new BigDecimal("5"));
-			BigDecimal lowestValue = portfolio.getTargetStockPercent().subtract(new BigDecimal("5"));
+	        if (currentStockPercent.compareTo(highestValue) <= 0 &&
+	            currentStockPercent.compareTo(lowestValue) >= 0) {
+	            return "No Rebalance Needed – everything is already balanced";
+	        }
 
-			if (currentStockPercent.compareTo(highestValue) <= 0 && currentStockPercent.compareTo(lowestValue) >= 0) {
-				return "No Rebalance Needed – everything is already balanced";
-			}
+	        BigDecimal stockShare =
+	                total.multiply(portfolio.getTargetStockPercent())
+	                     .divide(new BigDecimal("100"), 2);
 
-			BigDecimal stockShare  = total.multiply(portfolio.getTargetStockPercent()).divide(new BigDecimal("100"), 2);
+	        BigDecimal bondShare =
+	                total.multiply(portfolio.getTargetBondPercent())
+	                     .divide(new BigDecimal("100"), 2);
 
-			BigDecimal bondShare  = total.multiply(portfolio.getTargetBondPercent()).divide(new BigDecimal("100"), 2);
+	        BigDecimal difference = stockTotal.subtract(stockShare);
+	        log.info("Amount to adjust: " + difference);
 
-			BigDecimal difference   = stockTotal.subtract(stockShare);
-			log.info("Amount to adjust: " + difference  );
+	        if (difference.abs().compareTo(new BigDecimal("100")) < 0) {
+	            return "No Rebalance – adjustment amount is too small";
+	        }
 
-			if (difference .abs().compareTo(new BigDecimal("100")) < 0) {
-				return "No Rebalance – adjustment amount is too small";
-			}
+	        lots.sort((a, b) -> getPriority(a).compareTo(getPriority(b)));
 
-			lots.sort((a, b) -> getPriority(a).compareTo(getPriority(b)));
+	        BigDecimal gains = BigDecimal.ZERO;
+	        BigDecimal losses = BigDecimal.ZERO;
 
-			BigDecimal gains = BigDecimal.ZERO;
-			BigDecimal losses = BigDecimal.ZERO;
+	        for (TaxLot lot : lots) {
+	            if (lot.getAssetType().equalsIgnoreCase("BOND"))
+	                continue;
 
-			for (TaxLot lot : lots) {
-				if (lot.getAssetType().equalsIgnoreCase("BOND"))
-					continue;
+	            if (lot.getProfit().compareTo(BigDecimal.ZERO) > 0) {
+	                gains = gains.add(lot.getProfit());
+	            }
 
-				if (lot.getProfit().compareTo(BigDecimal.ZERO) > 0) {
-					gains = gains.add(lot.getProfit());
-				}
-				if (lot.isInLoss()) {
-					BigDecimal lossValue = lot.getAmountAfterProfit().subtract(lot.getAmount());
-					losses = losses.add(lossValue);
-				}
-			}
+	            if (lot.isInLoss()) {
+	                BigDecimal lossValue =
+	                        lot.getAmountAfterProfit().subtract(lot.getAmount());
+	                losses = losses.add(lossValue);
+	            }
+	        }
 
-			BigDecimal adjustValue = losses.min(gains);
-			BigDecimal finalResult = gains.subtract(adjustValue );
+	        BigDecimal adjustValue = losses.min(gains);
+	        BigDecimal finalResult = gains.subtract(adjustValue);
 
-			BigDecimal valueLeft  = difference.abs();
-			BigDecimal taxPaid = BigDecimal.ZERO;
+	        BigDecimal valueLeft = difference.abs();
+	        BigDecimal taxPaid = BigDecimal.ZERO;
 
-			for (TaxLot lot : lots) {
-				if (valueLeft .compareTo(BigDecimal.ZERO) <= 0)
-					break;
-				if (lot.getAssetType().equalsIgnoreCase("BOND"))
-					continue;
+	        for (TaxLot lot : lots) {
+	            if (valueLeft.compareTo(BigDecimal.ZERO) <= 0)
+	                break;
 
-				BigDecimal sellAmount = lot.getAmountAfterProfit();
-				if (sellAmount.compareTo(valueLeft ) > 0) {
-					sellAmount = valueLeft ;
-				}
+	            if (lot.getAssetType().equalsIgnoreCase("BOND"))
+	                continue;
 
-				if (lot.getProfit().compareTo(BigDecimal.ZERO) > 0 && finalResult.compareTo(BigDecimal.ZERO) > 0) {
-					BigDecimal tax = sellAmount.multiply(lot.getTaxPercent()).divide(new BigDecimal("100"), 2);
-					taxPaid = taxPaid.add(tax);
-				}
+	            BigDecimal sellAmount = lot.getAmountAfterProfit();
+	            if (sellAmount.compareTo(valueLeft) > 0) {
+	                sellAmount = valueLeft;
+	            }
 
-				if (lot.getBuyDate().plusDays(30).isAfter(LocalDate.now()) && lot.isInLoss()) {
-					lot.setTaxPercent(BigDecimal.ZERO);
-					lot.setProfit(BigDecimal.ZERO);
-				}
+	            if (lot.getProfit().compareTo(BigDecimal.ZERO) > 0 &&
+	                finalResult.compareTo(BigDecimal.ZERO) > 0) {
 
-				lot.setAmount(lot.getAmountAfterProfit().subtract(sellAmount));
-				lot.setAmountAfterProfit(lot.getAmountAfterProfit().subtract(sellAmount));
-				taxLotRepository.save(lot);
+	                BigDecimal tax =
+	                        sellAmount.multiply(lot.getTaxPercent())
+	                                  .divide(new BigDecimal("100"), 2);
+	                taxPaid = taxPaid.add(tax);
+	            }
 
-				valueLeft  = valueLeft .subtract(sellAmount);
-			}
+	            if (lot.getBuyDate().plusDays(30).isAfter(LocalDate.now())
+	                    && lot.isInLoss()) {
+	                lot.setTaxPercent(BigDecimal.ZERO);
+	                lot.setProfit(BigDecimal.ZERO);
+	            }
 
-			BigDecimal bondAfter = BigDecimal.ZERO;
-			List<TaxLot> updated = taxLotRepository.findByUserId(userId);
+	            lot.setAmountAfterProfit(
+	                    lot.getAmountAfterProfit().subtract(sellAmount));
+	            taxLotRepository.save(lot);
 
-			for (TaxLot lot : updated) {
-				if (lot.getAssetType().equalsIgnoreCase("BOND")) {
-					bondAfter = bondAfter.add(lot.getAmountAfterProfit());
-				}
-			}
+	            valueLeft = valueLeft.subtract(sellAmount);
+	        }
 
-			BigDecimal bondNeeded = bondShare.subtract(bondAfter);
-			if (bondNeeded.compareTo(BigDecimal.ZERO) > 0) {
-				TaxLot newBond = new TaxLot();
-				newBond.setUserId(userId);
-				newBond.setAssetType("BOND");
-				newBond.setAssetName("BOND_DYNAMIC");
-				newBond.setAmount(bondNeeded);
-				newBond.setAmountAfterProfit(bondNeeded);
-				newBond.setBuyDate(LocalDate.now());
-				newBond.setProfit(BigDecimal.ZERO);
-				newBond.setTaxPercent(BigDecimal.ZERO);
-				newBond.setTerm("LONG");
+	        total = total.subtract(taxPaid);
 
-				taxLotRepository.save(newBond);
-			}
+	        BigDecimal finalStockAmount =
+	                total.multiply(portfolio.getTargetStockPercent())
+	                     .divide(new BigDecimal("100"), 2);
 
-			return "Rebalanced Successfully\nTax Paid: " + taxPaid;
+	        BigDecimal finalBondAmount =
+	                total.multiply(portfolio.getTargetBondPercent())
+	                     .divide(new BigDecimal("100"), 2);
 
-		} catch (Exception e) {
-			log.error("Rebalancing failed", e);
-			throw new CustomException("Rebalancing failed for user: " + userId, HttpStatus.NOT_FOUND);
-		}
+	        for (TaxLot lot : lots) {
+	            if (lot.getAssetType().equalsIgnoreCase("STOCK")) {
+	                lot.setAmountAfterProfit(finalStockAmount);
+	                taxLotRepository.save(lot);
+	                break;
+	            }
+	        }
+
+	        BigDecimal bondAfter = BigDecimal.ZERO;
+	        List<TaxLot> updated = taxLotRepository.findByUserId(userId);
+
+	        for (TaxLot lot : updated) {
+	            if (lot.getAssetType().equalsIgnoreCase("BOND")) {
+	                bondAfter = bondAfter.add(lot.getAmountAfterProfit());
+	            }
+	        }
+
+	        BigDecimal bondNeeded = finalBondAmount.subtract(bondAfter);
+
+	        if (bondNeeded.compareTo(BigDecimal.ZERO) > 0) {
+	            TaxLot newBond = new TaxLot();
+	            newBond.setUserId(userId);
+	            newBond.setAssetType("BOND");
+	            newBond.setAssetName("BOND_DYNAMIC");
+	            newBond.setAmount(bondNeeded);
+	            newBond.setAmountAfterProfit(bondNeeded);
+	            newBond.setBuyDate(LocalDate.now());
+	            newBond.setProfit(BigDecimal.ZERO);
+	            newBond.setTaxPercent(BigDecimal.ZERO);
+	            newBond.setTerm("LONG");
+
+	            taxLotRepository.save(newBond);
+	        }
+
+	        return "Rebalanced Successfully\nTax Paid: " + taxPaid;
+
+	    } catch (Exception e) {
+	        log.error("Rebalancing failed", e);
+	        throw new CustomException(
+	                "Rebalancing failed for user: " + userId,
+	                HttpStatus.NOT_FOUND
+	        );
+	    }
 	}
 
 	private BigDecimal getPriority(TaxLot lot) {
